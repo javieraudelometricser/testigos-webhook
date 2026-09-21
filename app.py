@@ -19,12 +19,12 @@ def armar_mensaje(valor):
     verb = valor.get("verb", "add")
     post_id = valor.get("post_id", "")
     link = f"https://www.facebook.com/{post_id}" if post_id else "sin link"
+    autor = valor.get("from", {}).get("name", "alguien")
 
     if verb != "add":
         return f"ℹ️ Actividad ({verb}) en Facebook\n🔗 {link}"
 
     if item == "comment":
-        autor = valor.get("sender_name", "alguien")
         texto = valor.get("message", "(sin texto)")
         return (
             f"💬 Nuevo comentario en Facebook\n"
@@ -37,6 +37,7 @@ def armar_mensaje(valor):
         texto = valor.get("message", "(sin texto)")
         return (
             f"🔔 Nuevo post en Facebook\n"
+            f"Página: {autor}\n"
             f"\"{texto}\"\n"
             f"🔗 {link}"
         )
