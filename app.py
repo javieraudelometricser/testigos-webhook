@@ -4,6 +4,10 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
+@app.route("/")
+def inicio():
+    return "Servicio activo", 200
+
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "cambia_esto_luego")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
