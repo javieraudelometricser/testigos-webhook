@@ -64,7 +64,16 @@ def recibir():
     except Exception as e:
         enviar_alerta(f"❌ Error procesando webhook: {e}")
     return "OK", 200
-
+@app.route("/oauth/callback")
+def oauth_callback():
+    code = request.args.get("code")
+    if not code:
+        return "No se recibió código de autorización", 400
+    return f"""
+        <h2>Autorización recibida</h2>
+        <p>Copia este código y mándaselo a Javier:</p>
+        <code>{code}</code>
+    """
 
 if __name__ == "__main__":
     app.run(port=5000)
