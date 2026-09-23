@@ -100,21 +100,6 @@ def verificar():
         return request.args.get("hub.challenge")
     return "Token invalido", 403
 
-
-@app.route("/webhook", methods=["POST"])
-def recibir():
-    datos = request.json
-    try:
-        for entrada in datos.get("entry", []):
-            for cambio in entrada.get("changes", []):
-                if cambio.get("field") == "feed":
-                    mensaje = armar_mensaje(cambio.get("value", {}))
-                    enviar_alerta(mensaje)
-    except Exception as e:
-        enviar_alerta(f"❌ Error procesando webhook: {e}")
-    return "OK", 200
-
-
 @app.route("/oauth/callback")
 def oauth_callback():
     code = request.args.get("code")
