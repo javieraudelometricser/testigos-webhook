@@ -1,0 +1,24 @@
+name: Renovar suscripcion YouTube
+
+on:
+  schedule:
+    - cron: "0 12 */4 * *"
+  workflow_dispatch:
+
+jobs:
+  renovar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repo
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install requests
+
+      - name: Renovar suscripcion
+        run: python suscribir_youtube.py
