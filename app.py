@@ -51,6 +51,48 @@ def armar_mensaje(valor):
 
     return f"⚠️ Evento no reconocido ({item})\n🔗 {link}"
 
+def armar_mensaje_instagram(field, valor):
+    if field == "comments":
+        autor = valor.get("from", {}).get("username", "alguien")
+        texto = valor.get("text", "(sin texto)")
+        media_id = valor.get("media", {}).get("id", "")
+        return (
+            f"📸 Nuevo comentario en Instagram\n"
+            f"Autor: {autor}\n"
+            f"\"{texto}\"\n"
+            f"🔗 Post: {media_id}"
+        )
+
+    if field == "mentions":
+        media_id = valor.get("media_id", "")
+        comment_id = valor.get("comment_id", "")
+        if comment_id:
+            return f"📸 Te mencionaron en un comentario de Instagram\n🔗 Post: {media_id}"
+        return f"📸 Te mencionaron en un post de Instagram\n🔗 Post: {media_id}"
+
+    return f"⚠️ Evento de Instagram no reconocido ({field})"
+
+
+@app.route("/webhook", methods=["POST"])
+def recibir():
+    datos = request.json
+    try:
+        objeto = datos.get("object")
+        for entrada in datos.get("entry", []):
+            for cambio in entrada.get("changes", []):
+                field = cambio.get("field")
+
+                if objeto == "instagram":
+                    mensaje = armar_mensaje_instagram(field, cambio.get("value", {}))
+                    enviar_alerta(mensaje)
+
+                elif objeto == "page" and field == "feed":
+                    mensaje = armar_mensaje(cambio.get("value", {}))
+                    enviar_alerta(mensaje)
+
+    except Exception as e:
+        enviar_alerta(f"❌ Error procesando webhook: {e}")
+    return "OK", 200
 
 @app.route("/webhook", methods=["GET"])
 def verificar():
