@@ -28,6 +28,13 @@ def armar_mensaje(valor):
     link = f"https://www.facebook.com/{post_id}" if post_id else "sin link"
     autor = valor.get("from", {}).get("name", "alguien")
 
+    if item == "reaction":
+        reaction_type = valor.get("reaction_type", "reacción")
+        if verb == "add":
+            return f"👍 Nueva reacción ({reaction_type}) en Facebook\nAutor: {autor}\n🔗 {link}"
+        else:
+            return f"👎 Se quitó una reacción en Facebook\nAutor: {autor}\n🔗 {link}"
+
     if verb != "add":
         return f"ℹ️ Actividad ({verb}) en Facebook\n🔗 {link}"
 
