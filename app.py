@@ -110,7 +110,19 @@ def oauth_callback():
         <p>Copia este código y mándaselo a Javier:</p>
         <code>{code}</code>
     """
-
+@app.route("/privacy")
+def privacidad():
+    return """
+    <h2>Política de Privacidad - Alertas Afore</h2>
+    <p>Esta aplicación es una herramienta interna de uso exclusivo para el equipo
+    de la agencia y sus clientes autorizados. Se utiliza únicamente para recibir
+    notificaciones automáticas de actividad en páginas de redes sociales
+    administradas por el cliente (Facebook, Instagram, YouTube).</p>
+    <p>No se recopila, almacena ni comparte información personal de terceros.
+    Los datos procesados (comentarios, publicaciones) se usan exclusivamente
+    para generar alertas internas y no se comparten con ningún tercero.</p>
+    <p>Contacto: javier.audelo@metricser.com</p>
+    """, 200
 
 @app.route("/youtube_callback", methods=["GET"])
 def youtube_verificar():
