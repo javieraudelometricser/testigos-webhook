@@ -29,14 +29,23 @@ def armar_mensaje(valor):
     autor = valor.get("from", {}).get("name", "alguien")
 
     if item == "reaction":
-        reaction_type = valor.get("reaction_type", "reacción")
-        if verb == "add":
-            return f"👍 Nueva reacción ({reaction_type}) en Facebook\nAutor: {autor}\n🔗 {link}"
-        else:
-            return f"👎 Se quitó una reacción en Facebook\nAutor: {autor}\n🔗 {link}"
+        if verb == "remove":
+            return None  # no avisa cuando quitan una reacción
 
-    if verb != "add":
-        return f"ℹ️ Actividad ({verb}) en Facebook\n🔗 {link}"
+        reaction_type = valor.get("reaction_type", "like")
+        emojis_reaccion = {
+            "like": "👍",
+            "love": "❤️",
+            "wow": "😮",
+            "haha": "😆",
+            "sorry": "😢",
+            "anger": "😡",
+        }
+        emoji = emojis_reaccion.get(reaction_type, "👍")
+        return f"{emoji} Nueva reacción ({reaction_type}) en Facebook\nAutor: {autor}\n🔗 {link}"
+
+    if verb == "remove":
+        return None  # tampoco avisa si se borra un post o comentario
 
     if item == "comment":
         texto = valor.get("message", "(sin texto)")
@@ -94,9 +103,9 @@ def recibir():
                     enviar_alerta(mensaje)
 
                 elif objeto == "page" and field == "feed":
-                    print(f"DEBUG: {cambio.get('value', {})}")
                     mensaje = armar_mensaje(cambio.get("value", {}))
-                    enviar_alerta(mensaje)
+                    if mensaje:
+                     enviar_alerta(mensaje)
 
     except Exception as e:
         enviar_alerta(f"❌ Error procesando webhook: {e}")
