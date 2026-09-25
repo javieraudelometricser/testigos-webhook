@@ -94,6 +94,7 @@ def recibir():
                     enviar_alerta(mensaje)
 
                 elif objeto == "page" and field == "feed":
+                    print(f"DEBUG: {cambio.get('value', {})}")
                     mensaje = armar_mensaje(cambio.get("value", {}))
                     enviar_alerta(mensaje)
 
