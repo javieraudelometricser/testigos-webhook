@@ -88,6 +88,52 @@ def clasificar_instagram(field):
     return "otros"
 
 
+def armar_mensaje(valor):
+    item = valor.get("item")
+    verb = valor.get("verb", "add")
+    post_id = valor.get("post_id", "")
+    link = f"https://www.facebook.com/{post_id}" if post_id else "sin link"
+    autor = valor.get("from", {}).get("name", "alguien")
+
+    if verb == "remove":
+        return None
+
+    if item == "reaction":
+        reaction_type = valor.get("reaction_type", "like")
+        emojis_reaccion = {
+            "like": "👍", "love": "❤️", "wow": "😮",
+            "haha": "😆", "sorry": "😢", "anger": "😡",
+        }
+        emoji = emojis_reaccion.get(reaction_type, "👍")
+        return f"{emoji} Nueva reacción ({reaction_type}) en Facebook\nAutor: {autor}\n🔗 {link}"
+
+    if item == "comment":
+        texto = valor.get("message", "(sin texto)")
+        return f"💬 Nuevo comentario en Facebook\nAutor: {autor}\n\"{texto}\"\n🔗 {link}"
+
+    if item in ("status", "photo", "video", "link"):
+        texto = valor.get("message", "(sin texto)")
+        return f"🔔 Nuevo post en Facebook\nPágina: {autor}\n\"{texto}\"\n🔗 {link}"
+
+    return f"⚠️ Evento no reconocido ({item})\n🔗 {link}"
+
+
+def armar_mensaje_instagram(field, valor):
+    if field == "comments":
+        autor = valor.get("from", {}).get("username", "alguien")
+        texto = valor.get("text", "(sin texto)")
+        media_id = valor.get("media", {}).get("id", "")
+        return f"📸 Nuevo comentario en Instagram\nAutor: {autor}\n\"{texto}\"\n🔗 Post: {media_id}"
+
+    if field == "mentions":
+        media_id = valor.get("media_id", "")
+        if valor.get("comment_id"):
+            return f"📸 Te mencionaron en un comentario de Instagram\n🔗 Post: {media_id}"
+        return f"📸 Te mencionaron en un post de Instagram\n🔗 Post: {media_id}"
+
+    return f"⚠️ Evento de Instagram no reconocido ({field})"
+
+
 def armar_resumen(conteos):
     """Arma el texto del resumen. Devuelve None si no hubo actividad."""
     bloques = []
@@ -113,14 +159,16 @@ def recibir():
         for entrada in datos.get("entry", []):
             for cambio in entrada.get("changes", []):
                 field = cambio.get("field")
+                valor = cambio.get("value", {})
                 if objeto == "instagram":
                     registrar("instagram", clasificar_instagram(field))
+                    enviar_alerta(armar_mensaje_instagram(field, valor))
                 elif objeto == "page" and field == "feed":
-                    tipo = clasificar_facebook(cambio.get("value", {}))
+                    tipo = clasificar_facebook(valor)
                     if tipo:
                         registrar("facebook", tipo)
+                        enviar_alerta(armar_mensaje(valor))
     except Exception as e:
-        # Los errores se siguen avisando al momento
         enviar_alerta(f"❌ Error procesando webhook: {e}")
     return "OK", 200
 
@@ -195,6 +243,10 @@ def youtube_recibir():
         entrada = root.find("atom:entry", NS)
         if entrada is not None:
             registrar("youtube", "videos")
+            titulo = entrada.find("atom:title", NS).text
+            link_el = entrada.find("atom:link[@rel='alternate']", NS)
+            link = link_el.get("href") if link_el is not None else "sin link"
+            enviar_alerta(f"🔔 Nuevo video en YouTube\n\"{titulo}\"\n🔗 {link}")
     except Exception as e:
         enviar_alerta(f"❌ Error procesando YouTube: {e}")
     return "OK", 200
