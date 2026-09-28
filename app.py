@@ -1,5 +1,6 @@
 import os
 import requests
+import xml.etree.ElementTree as ET
 from flask import Flask, request, Response
 
 app = Flask(__name__)
@@ -14,6 +15,11 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "cambia_esto_luego")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 CANAL_YOUTUBE = "UCmYx6HZpnFV5LgiOgZ4SWzA"
+
+NS = {
+    "atom": "http://www.w3.org/2005/Atom",
+    "yt": "http://www.youtube.com/xml/schemas/2015",
+}
 
 
 def enviar_alerta(texto):
@@ -67,6 +73,7 @@ def armar_mensaje(valor):
 
     return f"⚠️ Evento no reconocido ({item})\n🔗 {link}"
 
+
 def armar_mensaje_instagram(field, valor):
     if field == "comments":
         autor = valor.get("from", {}).get("username", "alguien")
@@ -105,17 +112,19 @@ def recibir():
                 elif objeto == "page" and field == "feed":
                     mensaje = armar_mensaje(cambio.get("value", {}))
                     if mensaje:
-                     enviar_alerta(mensaje)
+                        enviar_alerta(mensaje)
 
     except Exception as e:
         enviar_alerta(f"❌ Error procesando webhook: {e}")
     return "OK", 200
+
 
 @app.route("/webhook", methods=["GET"])
 def verificar():
     if request.args.get("hub.verify_token") == VERIFY_TOKEN:
         return request.args.get("hub.challenge")
     return "Token invalido", 403
+
 
 @app.route("/oauth/callback")
 def oauth_callback():
@@ -127,6 +136,8 @@ def oauth_callback():
         <p>Copia este código y mándaselo a Javier:</p>
         <code>{code}</code>
     """
+
+
 @app.route("/privacy")
 def privacidad():
     return """
@@ -141,6 +152,7 @@ def privacidad():
     <p>Contacto: javier.audelo@metricser.com</p>
     """, 200
 
+
 @app.route("/youtube_callback", methods=["GET"])
 def youtube_verificar():
     challenge = request.args.get("hub.challenge")
@@ -151,11 +163,14 @@ def youtube_verificar():
 
 @app.route("/youtube_callback", methods=["POST"])
 def youtube_recibir():
-    datos = request.data.decode("utf-8")
+    datos = request.data
     try:
-        if "<title>" in datos and "<link" in datos:
-            titulo = datos.split("<title>")[1].split("</title>")[0]
-            link = datos.split('href="')[1].split('"')[0]
+        root = ET.fromstring(datos)
+        entrada = root.find("atom:entry", NS)
+        if entrada is not None:
+            titulo = entrada.find("atom:title", NS).text
+            link_el = entrada.find("atom:link[@rel='alternate']", NS)
+            link = link_el.get("href") if link_el is not None else "sin link"
             enviar_alerta(f"🔔 Nuevo video en YouTube\n\"{titulo}\"\n🔗 {link}")
     except Exception as e:
         enviar_alerta(f"❌ Error procesando YouTube: {e}")
