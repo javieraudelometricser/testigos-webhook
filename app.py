@@ -17,6 +17,8 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "cambia_esto_luego")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 RESUMEN_TOKEN = os.environ.get("RESUMEN_TOKEN", "")
+# Mensajes individuales por evento. Apagados salvo que en Render se ponga ALERTAS_INDIVIDUALES=1
+ALERTAS_INDIVIDUALES = os.environ.get("ALERTAS_INDIVIDUALES", "0") == "1"
 CANAL_YOUTUBE = "UCmYx6HZpnFV5LgiOgZ4SWzA"
 
 NS = {
@@ -24,21 +26,24 @@ NS = {
     "yt": "http://www.youtube.com/xml/schemas/2015",
 }
 
-# Orden y etiquetas del resumen: (red, título, [(tipo, emoji, texto)])
+# Orden y etiquetas del resumen.
+# Cada línea: (tipo, emoji, singular, plural, fija)
+# "fija" = se muestra siempre, aunque esté en 0 (placeholder).
 SECCIONES = [
     ("facebook", "Facebook", [
-        ("reacciones", "👍", "reacciones"),
-        ("comentarios", "💬", "comentarios"),
-        ("posts", "🔔", "posts nuevos"),
-        ("otros", "⚠️", "eventos no reconocidos"),
+        ("reacciones", "👍", "reacción", "reacciones", True),
+        ("comentarios", "💬", "comentario", "comentarios", True),
+        ("inbox", "📩", "inbox", "inbox", True),  # visión: aún no se recibe (falta Messenger)
+        ("posts", "🔔", "post nuevo", "posts nuevos", False),
+        ("otros", "⚠️", "evento no reconocido", "eventos no reconocidos", False),
     ]),
     ("instagram", "Instagram", [
-        ("comentarios", "💬", "comentarios"),
-        ("menciones", "📣", "menciones"),
-        ("otros", "⚠️", "eventos no reconocidos"),
+        ("comentarios", "💬", "comentario", "comentarios", False),
+        ("menciones", "📣", "mención", "menciones", False),
+        ("otros", "⚠️", "evento no reconocido", "eventos no reconocidos", False),
     ]),
     ("youtube", "YouTube", [
-        ("videos", "🎬", "videos nuevos"),
+        ("videos", "🎬", "video nuevo", "videos nuevos", False),
     ]),
 ]
 
@@ -135,19 +140,20 @@ def armar_mensaje_instagram(field, valor):
 
 
 def armar_resumen(conteos):
-    """Arma el texto del resumen. Devuelve None si no hubo actividad."""
+    """Arma el texto del resumen. Devuelve None si no hubo ninguna actividad."""
+    if not any(conteos.values()):
+        return None
+
     bloques = []
     for red, titulo, tipos in SECCIONES:
         lineas = []
-        for tipo, emoji, texto in tipos:
+        for tipo, emoji, singular, plural, fija in tipos:
             n = conteos.get((red, tipo), 0)
-            if n:
-                lineas.append(f"{emoji} {n} {texto}")
+            if n or fija:
+                lineas.append(f"{emoji} {n} {singular if n == 1 else plural}")
         if lineas:
             bloques.append(titulo + "\n" + "\n".join(lineas))
 
-    if not bloques:
-        return None
     return "📊 Resumen (últimos 5 min)\n\n" + "\n\n".join(bloques)
 
 
@@ -162,12 +168,14 @@ def recibir():
                 valor = cambio.get("value", {})
                 if objeto == "instagram":
                     registrar("instagram", clasificar_instagram(field))
-                    enviar_alerta(armar_mensaje_instagram(field, valor))
+                    if ALERTAS_INDIVIDUALES:
+                        enviar_alerta(armar_mensaje_instagram(field, valor))
                 elif objeto == "page" and field == "feed":
                     tipo = clasificar_facebook(valor)
                     if tipo:
                         registrar("facebook", tipo)
-                        enviar_alerta(armar_mensaje(valor))
+                        if ALERTAS_INDIVIDUALES:
+                            enviar_alerta(armar_mensaje(valor))
     except Exception as e:
         enviar_alerta(f"❌ Error procesando webhook: {e}")
     return "OK", 200
@@ -243,10 +251,11 @@ def youtube_recibir():
         entrada = root.find("atom:entry", NS)
         if entrada is not None:
             registrar("youtube", "videos")
-            titulo = entrada.find("atom:title", NS).text
-            link_el = entrada.find("atom:link[@rel='alternate']", NS)
-            link = link_el.get("href") if link_el is not None else "sin link"
-            enviar_alerta(f"🔔 Nuevo video en YouTube\n\"{titulo}\"\n🔗 {link}")
+            if ALERTAS_INDIVIDUALES:
+                titulo = entrada.find("atom:title", NS).text
+                link_el = entrada.find("atom:link[@rel='alternate']", NS)
+                link = link_el.get("href") if link_el is not None else "sin link"
+                enviar_alerta(f"🔔 Nuevo video en YouTube\n\"{titulo}\"\n🔗 {link}")
     except Exception as e:
         enviar_alerta(f"❌ Error procesando YouTube: {e}")
     return "OK", 200
