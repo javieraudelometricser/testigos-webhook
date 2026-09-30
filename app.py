@@ -104,8 +104,29 @@ def enviar_alerta(texto, html_mode=False):
 # ---------- Clasificación y mensajes individuales ----------
 
 def link_facebook(valor):
+    """Arma el link al post (y al comentario, si aplica).
+
+    1) Si Meta manda el permalink oficial del post, se usa ese.
+    2) Si no, se arma con el formato /{pagina}/posts/{post}, porque
+       facebook.com/{pagina_post} no siempre abre bien.
+    """
     post_id = valor.get("post_id", "")
-    return f"https://www.facebook.com/{post_id}" if post_id else ""
+    comment_id = valor.get("comment_id", "")
+    permalink = (valor.get("post") or {}).get("permalink_url", "")
+
+    if permalink:
+        base = permalink
+    elif "_" in post_id:
+        pagina, post = post_id.split("_", 1)
+        base = f"https://www.facebook.com/{pagina}/posts/{post}"
+    elif post_id:
+        base = f"https://www.facebook.com/{post_id}"
+    else:
+        return ""
+
+    if comment_id:
+        base += ("&" if "?" in base else "?") + f"comment_id={comment_id.split('_')[-1]}"
+    return base
 
 
 def clasificar_facebook(valor):
