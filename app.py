@@ -4,6 +4,7 @@ import hmac
 import html
 import threading
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 import requests
 import xml.etree.ElementTree as ET
@@ -24,6 +25,25 @@ RESUMEN_TOKEN = os.environ.get("RESUMEN_TOKEN", "")
 # Mensajes individuales por evento. Apagados salvo que en Render se ponga ALERTAS_INDIVIDUALES=1
 ALERTAS_INDIVIDUALES = os.environ.get("ALERTAS_INDIVIDUALES", "0") == "1"
 CANAL_YOUTUBE = "UCmYx6HZpnFV5LgiOgZ4SWzA"
+
+# Horario de operación (hora de Ciudad de México). Fuera de este horario
+# no se mandan resúmenes, pero se sigue contando y todo sale a la hora de inicio.
+HORA_INICIO = int(os.environ.get("HORA_INICIO", "7"))
+HORA_FIN = int(os.environ.get("HORA_FIN", "24"))  # 24 = medianoche
+
+try:
+    from zoneinfo import ZoneInfo
+    ZONA = ZoneInfo("America/Mexico_City")
+except Exception:
+    ZONA = timezone(timedelta(hours=-6))  # CDMX no tiene horario de verano desde 2022
+
+
+def ahora():
+    return datetime.now(ZONA)
+
+
+def en_horario(momento):
+    return HORA_INICIO <= momento.hour < HORA_FIN
 
 NS = {
     "atom": "http://www.w3.org/2005/Atom",
@@ -69,6 +89,8 @@ def estado_vacio():
         "conteos": Counter(),        # {(red, tipo): n}
         "tipos_reaccion": Counter(),  # {"love": n} (Facebook)
         "comentarios": [],            # [(red, autor, texto, link)]
+        "inicio": ahora(),            # desde cuándo se está acumulando
+        "fuera_de_horario": False,    # True si el periodo cruzó la noche
     }
 
 
@@ -194,7 +216,7 @@ def recortar(texto, n):
     return texto if len(texto) <= n else texto[: n - 1] + "…"
 
 
-def armar_resumen(snap):
+def armar_resumen(snap, titulo="📊 <b>Resumen (últimos 5 min)</b>"):
     """Arma el resumen en HTML de Telegram. Devuelve None si no hubo actividad."""
     conteos = snap["conteos"]
     if not any(conteos.values()):
@@ -202,7 +224,7 @@ def armar_resumen(snap):
 
     esc = html.escape
     bloques = []
-    for red, titulo, tipos in SECCIONES:
+    for red, nombre_red, tipos in SECCIONES:
         lineas = []
         for tipo, emoji, singular, plural, fija in tipos:
             n = conteos.get((red, tipo), 0)
@@ -217,9 +239,9 @@ def armar_resumen(snap):
                 linea += f"  ({desglose})"
             lineas.append(esc(linea))
         if lineas:
-            bloques.append(f"<b>{esc(titulo)}</b>\n" + "\n".join(lineas))
+            bloques.append(f"<b>{esc(nombre_red)}</b>\n" + "\n".join(lineas))
 
-    texto = "📊 <b>Resumen (últimos 5 min)</b>\n\n" + "\n\n".join(bloques)
+    texto = titulo + "\n\n" + "\n\n".join(bloques)
 
     comentarios = snap["comentarios"]
     if comentarios:
@@ -297,12 +319,25 @@ def resumen():
     if not RESUMEN_TOKEN or not hmac.compare_digest(token, RESUMEN_TOKEN):
         return "No autorizado", 403
 
+    momento = ahora()
+
+    # Fuera de horario: no se manda nada, se sigue acumulando para el resumen nocturno
+    if not en_horario(momento):
+        with candado:
+            estado["fuera_de_horario"] = True
+        return "Fuera de horario", 200
+
     # Tomar el estado y reiniciar de inmediato, para no perder eventos que lleguen mientras se envía
     with candado:
         snap = estado
         estado = estado_vacio()
 
-    texto = armar_resumen(snap)
+    if snap["fuera_de_horario"]:
+        titulo = (f"🌙 <b>Resumen nocturno ({snap['inicio']:%H:%M} – {momento:%H:%M})</b>")
+    else:
+        titulo = "📊 <b>Resumen (últimos 5 min)</b>"
+
+    texto = armar_resumen(snap, titulo)
     if texto is None:
         return "Sin actividad", 200
 
@@ -312,6 +347,8 @@ def resumen():
             estado["conteos"].update(snap["conteos"])
             estado["tipos_reaccion"].update(snap["tipos_reaccion"])
             estado["comentarios"][:0] = snap["comentarios"]
+            estado["inicio"] = snap["inicio"]
+            estado["fuera_de_horario"] = estado["fuera_de_horario"] or snap["fuera_de_horario"]
         return "Error al enviar a Telegram", 502
 
     return "Resumen enviado", 200
