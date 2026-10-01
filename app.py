@@ -30,6 +30,8 @@ CANAL_YOUTUBE = "UCmYx6HZpnFV5LgiOgZ4SWzA"
 # no se mandan resúmenes, pero se sigue contando y todo sale a la hora de inicio.
 HORA_INICIO = int(os.environ.get("HORA_INICIO", "7"))
 HORA_FIN = int(os.environ.get("HORA_FIN", "24"))  # 24 = medianoche
+# Cada cuánto llama el cron a /resumen (solo afecta el título del mensaje)
+MINUTOS_RESUMEN = int(os.environ.get("MINUTOS_RESUMEN", "10"))
 
 try:
     from zoneinfo import ZoneInfo
@@ -72,7 +74,7 @@ SECCIONES = [
         ("otros", "⚠️", "evento no reconocido", "eventos no reconocidos", False),
     ]),
     ("youtube", "YouTube", [
-        ("videos", "🎬", "video nuevo", "videos nuevos", False),
+        ("videos", "🎬", "video nuevo", "videos nuevos", True),
     ]),
 ]
 
@@ -216,7 +218,7 @@ def recortar(texto, n):
     return texto if len(texto) <= n else texto[: n - 1] + "…"
 
 
-def armar_resumen(snap, titulo="📊 <b>Resumen (últimos 5 min)</b>"):
+def armar_resumen(snap, titulo=None):
     """Arma el resumen en HTML de Telegram. Devuelve None si no hubo actividad."""
     conteos = snap["conteos"]
     if not any(conteos.values()):
@@ -241,6 +243,7 @@ def armar_resumen(snap, titulo="📊 <b>Resumen (últimos 5 min)</b>"):
         if lineas:
             bloques.append(f"<b>{esc(nombre_red)}</b>\n" + "\n".join(lineas))
 
+    titulo = titulo or f"📊 <b>Resumen (últimos {MINUTOS_RESUMEN} min)</b>"
     texto = titulo + "\n\n" + "\n\n".join(bloques)
 
     comentarios = snap["comentarios"]
@@ -335,7 +338,7 @@ def resumen():
     if snap["fuera_de_horario"]:
         titulo = (f"🌙 <b>Resumen nocturno ({snap['inicio']:%H:%M} – {momento:%H:%M})</b>")
     else:
-        titulo = "📊 <b>Resumen (últimos 5 min)</b>"
+        titulo = None
 
     texto = armar_resumen(snap, titulo)
     if texto is None:
